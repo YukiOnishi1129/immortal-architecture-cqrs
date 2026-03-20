@@ -16,6 +16,28 @@ import (
 	"immortal-architecture-cqrs/backend/internal/port"
 )
 
+// newTestController creates a NoteController with command and query stubs.
+func newTestController(commandStub *ctrlmock.NoteCommandInputStub, queryStub *ctrlmock.NoteQueryInputStub) *NoteController {
+	cp := presenter.NewNoteCommandPresenter()
+	qp := presenter.NewNoteQueryPresenter()
+	return NewNoteController(
+		func(commandRepo port.NoteCommandRepository, queryRepo port.NoteQueryRepository, tplRepo port.TemplateRepository, tx port.TxManager, output port.NoteCommandOutputPort) port.NoteCommandInputPort {
+			commandStub.Output = output
+			return commandStub
+		},
+		func() *presenter.NoteCommandPresenter { return cp },
+		func(queryRepo port.NoteQueryRepository, output port.NoteQueryOutputPort) port.NoteQueryInputPort {
+			queryStub.Output = output
+			return queryStub
+		},
+		func() *presenter.NoteQueryPresenter { return qp },
+		func() port.NoteCommandRepository { return nil },
+		func() port.NoteQueryRepository { return nil },
+		func() port.TemplateRepository { return nil },
+		func() port.TxManager { return nil },
+	)
+}
+
 func TestNoteController_Create(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -38,18 +60,7 @@ func TestNoteController_Create(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := presenter.NewNotePresenter()
-			input := &ctrlmock.NoteInputStub{}
-			ctrl := NewNoteController(
-				func(noteRepo port.NoteRepository, tplRepo port.TemplateRepository, tx port.TxManager, output port.NoteOutputPort) port.NoteInputPort {
-					input.Output = output
-					return input
-				},
-				func() *presenter.NotePresenter { return p },
-				func() port.NoteRepository { return nil },
-				func() port.TemplateRepository { return nil },
-				func() port.TxManager { return nil },
-			)
+			ctrl := newTestController(&ctrlmock.NoteCommandInputStub{}, &ctrlmock.NoteQueryInputStub{})
 
 			e := echo.New()
 			req := httptest.NewRequest(http.MethodPost, "/api/notes", bytes.NewBufferString(tt.body))
@@ -77,19 +88,13 @@ func TestNoteController_List(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			queryStub := &ctrlmock.NoteQueryInputStub{
+				ReadModels: []note.NoteReadModel{{ID: "n1"}},
+				Err:        tt.inErr,
+			}
+			ctrl := newTestController(&ctrlmock.NoteCommandInputStub{}, queryStub)
+
 			e := echo.New()
-			p := presenter.NewNotePresenter()
-			input := &ctrlmock.NoteInputStub{Notes: []note.WithMeta{{Note: note.Note{ID: "n1"}}}, Err: tt.inErr}
-			ctrl := NewNoteController(
-				func(noteRepo port.NoteRepository, tplRepo port.TemplateRepository, tx port.TxManager, output port.NoteOutputPort) port.NoteInputPort {
-					input.Output = output
-					return input
-				},
-				func() *presenter.NotePresenter { return p },
-				func() port.NoteRepository { return nil },
-				func() port.TemplateRepository { return nil },
-				func() port.TxManager { return nil },
-			)
 			req := httptest.NewRequest(http.MethodGet, "/api/notes", nil)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
@@ -112,19 +117,10 @@ func TestNoteController_Get(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			queryStub := &ctrlmock.NoteQueryInputStub{Err: tt.inErr}
+			ctrl := newTestController(&ctrlmock.NoteCommandInputStub{}, queryStub)
+
 			e := echo.New()
-			p := presenter.NewNotePresenter()
-			input := &ctrlmock.NoteInputStub{Err: tt.inErr}
-			ctrl := NewNoteController(
-				func(noteRepo port.NoteRepository, tplRepo port.TemplateRepository, tx port.TxManager, output port.NoteOutputPort) port.NoteInputPort {
-					input.Output = output
-					return input
-				},
-				func() *presenter.NotePresenter { return p },
-				func() port.NoteRepository { return nil },
-				func() port.TemplateRepository { return nil },
-				func() port.TxManager { return nil },
-			)
 			req := httptest.NewRequest(http.MethodGet, "/api/notes/n1", nil)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
@@ -149,19 +145,10 @@ func TestNoteController_Update(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			commandStub := &ctrlmock.NoteCommandInputStub{Err: tt.inErr}
+			ctrl := newTestController(commandStub, &ctrlmock.NoteQueryInputStub{})
+
 			e := echo.New()
-			p := presenter.NewNotePresenter()
-			input := &ctrlmock.NoteInputStub{Err: tt.inErr}
-			ctrl := NewNoteController(
-				func(noteRepo port.NoteRepository, tplRepo port.TemplateRepository, tx port.TxManager, output port.NoteOutputPort) port.NoteInputPort {
-					input.Output = output
-					return input
-				},
-				func() *presenter.NotePresenter { return p },
-				func() port.NoteRepository { return nil },
-				func() port.TemplateRepository { return nil },
-				func() port.TxManager { return nil },
-			)
 			req := httptest.NewRequest(http.MethodPut, "/api/notes/n1", bytes.NewBufferString(tt.body))
 			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 			rec := httptest.NewRecorder()
@@ -187,19 +174,10 @@ func TestNoteController_Publish(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			commandStub := &ctrlmock.NoteCommandInputStub{Err: tt.inErr}
+			ctrl := newTestController(commandStub, &ctrlmock.NoteQueryInputStub{})
+
 			e := echo.New()
-			p := presenter.NewNotePresenter()
-			input := &ctrlmock.NoteInputStub{Err: tt.inErr}
-			ctrl := NewNoteController(
-				func(noteRepo port.NoteRepository, tplRepo port.TemplateRepository, tx port.TxManager, output port.NoteOutputPort) port.NoteInputPort {
-					input.Output = output
-					return input
-				},
-				func() *presenter.NotePresenter { return p },
-				func() port.NoteRepository { return nil },
-				func() port.TemplateRepository { return nil },
-				func() port.TxManager { return nil },
-			)
 			req := httptest.NewRequest(http.MethodPost, "/api/notes/n1/publish", nil)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
@@ -225,19 +203,10 @@ func TestNoteController_Unpublish(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			commandStub := &ctrlmock.NoteCommandInputStub{Err: tt.inErr}
+			ctrl := newTestController(commandStub, &ctrlmock.NoteQueryInputStub{})
+
 			e := echo.New()
-			p := presenter.NewNotePresenter()
-			input := &ctrlmock.NoteInputStub{Err: tt.inErr}
-			ctrl := NewNoteController(
-				func(noteRepo port.NoteRepository, tplRepo port.TemplateRepository, tx port.TxManager, output port.NoteOutputPort) port.NoteInputPort {
-					input.Output = output
-					return input
-				},
-				func() *presenter.NotePresenter { return p },
-				func() port.NoteRepository { return nil },
-				func() port.TemplateRepository { return nil },
-				func() port.TxManager { return nil },
-			)
 			req := httptest.NewRequest(http.MethodPost, "/api/notes/n1/unpublish", nil)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
@@ -262,19 +231,10 @@ func TestNoteController_Delete(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			commandStub := &ctrlmock.NoteCommandInputStub{Err: tt.inErr}
+			ctrl := newTestController(commandStub, &ctrlmock.NoteQueryInputStub{})
+
 			e := echo.New()
-			p := presenter.NewNotePresenter()
-			input := &ctrlmock.NoteInputStub{Err: tt.inErr}
-			ctrl := NewNoteController(
-				func(noteRepo port.NoteRepository, tplRepo port.TemplateRepository, tx port.TxManager, output port.NoteOutputPort) port.NoteInputPort {
-					input.Output = output
-					return input
-				},
-				func() *presenter.NotePresenter { return p },
-				func() port.NoteRepository { return nil },
-				func() port.TemplateRepository { return nil },
-				func() port.TxManager { return nil },
-			)
 			req := httptest.NewRequest(http.MethodDelete, "/api/notes/n1", nil)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)

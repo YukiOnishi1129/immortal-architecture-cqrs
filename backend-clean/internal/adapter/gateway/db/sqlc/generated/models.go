@@ -40,6 +40,21 @@ type Note struct {
 	UpdatedAt  pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }
 
+type NoteReadModel struct {
+	ID             pgtype.UUID        `db:"id" json:"id"`
+	Title          string             `db:"title" json:"title"`
+	Status         string             `db:"status" json:"status"`
+	TemplateID     pgtype.UUID        `db:"template_id" json:"template_id"`
+	TemplateName   string             `db:"template_name" json:"template_name"`
+	OwnerID        pgtype.UUID        `db:"owner_id" json:"owner_id"`
+	OwnerFirstName string             `db:"owner_first_name" json:"owner_first_name"`
+	OwnerLastName  string             `db:"owner_last_name" json:"owner_last_name"`
+	OwnerThumbnail pgtype.Text        `db:"owner_thumbnail" json:"owner_thumbnail"`
+	SectionsJson   []byte             `db:"sections_json" json:"sections_json"`
+	CreatedAt      pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
 type Section struct {
 	ID      pgtype.UUID `db:"id" json:"id"`
 	NoteID  pgtype.UUID `db:"note_id" json:"note_id"`

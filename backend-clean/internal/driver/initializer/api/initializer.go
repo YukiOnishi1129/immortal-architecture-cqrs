@@ -34,16 +34,19 @@ func BuildServer(ctx context.Context) (*echo.Echo, *config.Config, func(), error
 
 	accountRepoFactory := factory.NewAccountRepoFactory(pool)
 	templateRepoFactory := factory.NewTemplateRepoFactory(pool)
-	noteRepoFactory := factory.NewNoteRepoFactory(pool)
+	noteCommandRepoFactory := factory.NewNoteCommandRepoFactory(pool)
+	noteQueryRepoFactory := factory.NewNoteQueryRepoFactory(pool)
 	txFactory := factory.NewTxFactory(txMgr)
 
 	accountOutputFactory := httpfactory.NewAccountOutputFactory()
 	templateOutputFactory := httpfactory.NewTemplateOutputFactory()
-	noteOutputFactory := httpfactory.NewNoteOutputFactory()
+	noteCommandOutputFactory := httpfactory.NewNoteCommandOutputFactory()
+	noteQueryOutputFactory := httpfactory.NewNoteQueryOutputFactory()
 
 	accountInputFactory := factory.NewAccountInputFactory()
 	templateInputFactory := factory.NewTemplateInputFactory()
-	noteInputFactory := factory.NewNoteInputFactory()
+	noteCommandInputFactory := factory.NewNoteCommandInputFactory()
+	noteQueryInputFactory := factory.NewNoteQueryInputFactory()
 
 	e := echo.New()
 
@@ -60,7 +63,12 @@ func BuildServer(ctx context.Context) (*echo.Echo, *config.Config, func(), error
 	}))
 
 	ac := httpcontroller.NewAccountController(accountInputFactory, accountOutputFactory, accountRepoFactory)
-	nc := httpcontroller.NewNoteController(noteInputFactory, noteOutputFactory, noteRepoFactory, templateRepoFactory, txFactory)
+	nc := httpcontroller.NewNoteController(
+		noteCommandInputFactory, noteCommandOutputFactory,
+		noteQueryInputFactory, noteQueryOutputFactory,
+		noteCommandRepoFactory, noteQueryRepoFactory,
+		templateRepoFactory, txFactory,
+	)
 	tc := httpcontroller.NewTemplateController(templateInputFactory, templateOutputFactory, templateRepoFactory, txFactory)
 	server := httpcontroller.NewServer(ac, nc, tc)
 	openapi.RegisterHandlers(e, server)

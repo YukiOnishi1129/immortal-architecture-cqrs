@@ -14,34 +14,47 @@ import (
 	"immortal-architecture-cqrs/backend/internal/port"
 )
 
-// NoteController handles note HTTP endpoints.
+// NoteController handles note HTTP endpoints using CQRS pattern.
 type NoteController struct {
-	inputFactory    func(noteRepo port.NoteRepository, tplRepo port.TemplateRepository, tx port.TxManager, output port.NoteOutputPort) port.NoteInputPort
-	outputFactory   func() *presenter.NotePresenter
-	noteRepoFactory func() port.NoteRepository
-	tplRepoFactory  func() port.TemplateRepository
-	txFactory       func() port.TxManager
+	// Command (write) factories
+	commandInputFactory  func(commandRepo port.NoteCommandRepository, queryRepo port.NoteQueryRepository, tplRepo port.TemplateRepository, tx port.TxManager, output port.NoteCommandOutputPort) port.NoteCommandInputPort
+	commandOutputFactory func() *presenter.NoteCommandPresenter
+
+	// Query (read) factories
+	queryInputFactory  func(queryRepo port.NoteQueryRepository, output port.NoteQueryOutputPort) port.NoteQueryInputPort
+	queryOutputFactory func() *presenter.NoteQueryPresenter
+
+	// Shared repository factories
+	commandRepoFactory func() port.NoteCommandRepository
+	queryRepoFactory   func() port.NoteQueryRepository
+	tplRepoFactory     func() port.TemplateRepository
+	txFactory          func() port.TxManager
 }
 
 // NewNoteController creates NoteController.
 func NewNoteController(
-	inputFactory func(noteRepo port.NoteRepository, tplRepo port.TemplateRepository, tx port.TxManager, output port.NoteOutputPort) port.NoteInputPort,
-	outputFactory func() *presenter.NotePresenter,
-	noteRepoFactory func() port.NoteRepository,
+	commandInputFactory func(commandRepo port.NoteCommandRepository, queryRepo port.NoteQueryRepository, tplRepo port.TemplateRepository, tx port.TxManager, output port.NoteCommandOutputPort) port.NoteCommandInputPort,
+	commandOutputFactory func() *presenter.NoteCommandPresenter,
+	queryInputFactory func(queryRepo port.NoteQueryRepository, output port.NoteQueryOutputPort) port.NoteQueryInputPort,
+	queryOutputFactory func() *presenter.NoteQueryPresenter,
+	commandRepoFactory func() port.NoteCommandRepository,
+	queryRepoFactory func() port.NoteQueryRepository,
 	tplRepoFactory func() port.TemplateRepository,
 	txFactory func() port.TxManager,
 ) *NoteController {
 	return &NoteController{
-		inputFactory:    inputFactory,
-		outputFactory:   outputFactory,
-		noteRepoFactory: noteRepoFactory,
-		tplRepoFactory:  tplRepoFactory,
-		txFactory:       txFactory,
+		commandInputFactory:  commandInputFactory,
+		commandOutputFactory: commandOutputFactory,
+		queryInputFactory:    queryInputFactory,
+		queryOutputFactory:   queryOutputFactory,
+		commandRepoFactory:   commandRepoFactory,
+		queryRepoFactory:     queryRepoFactory,
+		tplRepoFactory:       tplRepoFactory,
+		txFactory:            txFactory,
 	}
 }
 
-// List handles listing notes with optional filters.
-// List handles GET /notes.
+// List handles GET /notes (Query side).
 func (c *NoteController) List(ctx echo.Context, params openapi.NotesListNotesParams) error {
 	var status *note.NoteStatus
 	if params.Status != nil {
@@ -54,24 +67,23 @@ func (c *NoteController) List(ctx echo.Context, params openapi.NotesListNotesPar
 		OwnerID:    params.OwnerId,
 		Query:      params.Q,
 	}
-	input, p := c.newIO()
+	input, p := c.newQueryIO()
 	if err := input.List(ctx.Request().Context(), filters); err != nil {
 		return handleError(ctx, err)
 	}
 	return ctx.JSON(http.StatusOK, p.Notes())
 }
 
-// GetByID handles GET /notes/:id.
+// GetByID handles GET /notes/:id (Query side).
 func (c *NoteController) GetByID(ctx echo.Context, noteID string) error {
-	input, p := c.newIO()
+	input, p := c.newQueryIO()
 	if err := input.Get(ctx.Request().Context(), noteID); err != nil {
 		return handleError(ctx, err)
 	}
 	return ctx.JSON(http.StatusOK, p.Note())
 }
 
-// Create handles creating a new note.
-// Create handles POST /notes.
+// Create handles POST /notes (Command side).
 func (c *NoteController) Create(ctx echo.Context) error {
 	var body openapi.ModelsCreateNoteRequest
 	if err := ctx.Bind(&body); err != nil {
@@ -87,7 +99,7 @@ func (c *NoteController) Create(ctx echo.Context) error {
 			})
 		}
 	}
-	input, p := c.newIO()
+	input, p := c.newCommandIO()
 	err := input.Create(ctx.Request().Context(), port.NoteCreateInput{
 		Title:      body.Title,
 		TemplateID: body.TemplateId.String(),
@@ -100,8 +112,7 @@ func (c *NoteController) Create(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, p.Note())
 }
 
-// Update handles updating a note.
-// Update handles PUT /notes/:id.
+// Update handles PUT /notes/:id (Command side).
 func (c *NoteController) Update(ctx echo.Context, noteID string, params openapi.NotesUpdateNoteParams) error {
 	var body openapi.ModelsUpdateNoteRequest
 	if err := ctx.Bind(&body); err != nil {
@@ -118,7 +129,7 @@ func (c *NoteController) Update(ctx echo.Context, noteID string, params openapi.
 			Content:   s.Content,
 		})
 	}
-	input, p := c.newIO()
+	input, p := c.newCommandIO()
 	err := input.Update(ctx.Request().Context(), port.NoteUpdateInput{
 		ID:       noteID,
 		Title:    body.Title,
@@ -131,28 +142,26 @@ func (c *NoteController) Update(ctx echo.Context, noteID string, params openapi.
 	return ctx.JSON(http.StatusOK, p.Note())
 }
 
-// Delete handles deleting a note.
-// Delete handles DELETE /notes/:id.
+// Delete handles DELETE /notes/:id (Command side).
 func (c *NoteController) Delete(ctx echo.Context, noteID string, params openapi.NotesDeleteNoteParams) error {
 	ownerID := strings.TrimSpace(params.OwnerId)
 	if ownerID == "" {
 		return handleError(ctx, domainerr.ErrUnauthorized)
 	}
-	input, p := c.newIO()
+	input, p := c.newCommandIO()
 	if err := input.Delete(ctx.Request().Context(), noteID, ownerID); err != nil {
 		return handleError(ctx, err)
 	}
 	return ctx.JSON(http.StatusOK, p.DeleteResponse())
 }
 
-// Publish handles publishing a note.
-// Publish handles POST /notes/:id/publish.
+// Publish handles POST /notes/:id/publish (Command side).
 func (c *NoteController) Publish(ctx echo.Context, noteID string, params openapi.NotesPublishNoteParams) error {
 	ownerID := strings.TrimSpace(params.OwnerId)
 	if ownerID == "" {
 		return handleError(ctx, domainerr.ErrOwnerRequired)
 	}
-	input, p := c.newIO()
+	input, p := c.newCommandIO()
 	err := input.ChangeStatus(ctx.Request().Context(), port.NoteStatusChangeInput{
 		ID:      noteID,
 		Status:  note.StatusPublish,
@@ -164,14 +173,13 @@ func (c *NoteController) Publish(ctx echo.Context, noteID string, params openapi
 	return ctx.JSON(http.StatusOK, p.Note())
 }
 
-// Unpublish handles unpublishing a note.
-// Unpublish handles POST /notes/:id/unpublish.
+// Unpublish handles POST /notes/:id/unpublish (Command side).
 func (c *NoteController) Unpublish(ctx echo.Context, noteID string, params openapi.NotesUnpublishNoteParams) error {
 	ownerID := strings.TrimSpace(params.OwnerId)
 	if ownerID == "" {
 		return handleError(ctx, domainerr.ErrOwnerRequired)
 	}
-	input, p := c.newIO()
+	input, p := c.newCommandIO()
 	err := input.ChangeStatus(ctx.Request().Context(), port.NoteStatusChangeInput{
 		ID:      noteID,
 		Status:  note.StatusDraft,
@@ -183,8 +191,14 @@ func (c *NoteController) Unpublish(ctx echo.Context, noteID string, params opena
 	return ctx.JSON(http.StatusOK, p.Note())
 }
 
-func (c *NoteController) newIO() (port.NoteInputPort, *presenter.NotePresenter) {
-	output := c.outputFactory()
-	input := c.inputFactory(c.noteRepoFactory(), c.tplRepoFactory(), c.txFactory(), output)
+func (c *NoteController) newCommandIO() (port.NoteCommandInputPort, *presenter.NoteCommandPresenter) {
+	output := c.commandOutputFactory()
+	input := c.commandInputFactory(c.commandRepoFactory(), c.queryRepoFactory(), c.tplRepoFactory(), c.txFactory(), output)
+	return input, output
+}
+
+func (c *NoteController) newQueryIO() (port.NoteQueryInputPort, *presenter.NoteQueryPresenter) {
+	output := c.queryOutputFactory()
+	input := c.queryInputFactory(c.queryRepoFactory(), output)
 	return input, output
 }
