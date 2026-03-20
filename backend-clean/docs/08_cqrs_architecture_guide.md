@@ -1,14 +1,14 @@
-# 🏗️ アーキテクチャ変更ガイド - CRUDからCQRSへ
+# 🏗️ CQRSアーキテクチャガイド - 読み書き分離の実装
 
 > 💡 **このドキュメントのゴール**
-> 今のClean Architecture（CRUD）を、**どこをどう変えてCQRSにするか**が
-> 具体的にイメージできるようになること。
+> Clean Architecture（CRUD）を **CQRSにどう組み替えたか** が
+> 具体的にわかること。実際のコードを見ながら読んでね。
 
 ---
 
 ## 🔄 Before / After を一枚絵で見よう
 
-### Before: 今のClean Architecture（CRUD）
+### Before: Clean Architecture（CRUD）
 
 ```
 📱 画面
@@ -107,9 +107,9 @@
 
 ---
 
-## 🧩 じゃあ具体的にどこを変える？
+## 🧩 ファイル構成 - 何がどこにある？
 
-### 今のファイル構成（変更前）
+### CRUD時代のファイル構成
 
 ```
 internal/
@@ -133,79 +133,85 @@ internal/
         └── api/initializer.go     ← 全部ここで配線
 ```
 
-### 変更後のファイル構成
+### CQRS後のファイル構成（実際のコード）
 
 ```
 internal/
 ├── port/
-│   ├── note_command_port.go         ← 🆕 Command系（書く）のポート
-│   └── note_query_port.go          ← 🆕 Query系（読む）のポート
+│   ├── note_command_port.go         ← Command系のポート
+│   │                                   → NoteCommandInputPort
+│   │                                   → NoteCommandOutputPort
+│   │                                   → NoteCommandRepository
+│   └── note_query_port.go          ← Query系のポート
+│                                       → NoteQueryInputPort
+│                                       → NoteQueryOutputPort
+│                                       → NoteQueryRepository
 │
 ├── usecase/
-│   ├── note_command_interactor.go   ← 🆕 Command系（書く）のユースケース
-│   │                                   ※ 書いた後にRead Modelも更新する
-│   └── note_query_interactor.go     ← 🆕 Query系（読む）のユースケース
+│   ├── note_command_interactor.go   ← Command系のユースケース
+│   │                                   書く + Read Model同期
+│   └── note_query_interactor.go     ← Query系のユースケース
+│                                       キャッシュテーブルから取るだけ
 │
 ├── adapter/
-│   ├── http/controller/
-│   │   └── note_controller.go       ← Command/Queryを使い分ける
+│   ├── http/
+│   │   ├── controller/
+│   │   │   └── note_controller.go   ← Command/Queryを使い分ける
+│   │   └── presenter/
+│   │       ├── note_command_presenter.go ← Command用プレゼンター
+│   │       └── note_query_presenter.go   ← Query用プレゼンター
 │   └── gateway/db/sqlc/
-│       ├── note_command_repository.go ← 🆕 Command用（書く専用）
-│       └── note_query_repository.go   ← 🆕 Query用（Read Model読み取り）
+│       ├── note_command_repository.go ← Command用リポジトリ
+│       ├── note_query_repository.go   ← Query用リポジトリ
+│       └── queries/
+│           ├── notes.sql              ← Command用SQL（既存）
+│           └── note_read_models.sql   ← Query用SQL
 │
 ├── domain/
 │   └── note/
-│       └── read_model.go            ← 🆕 Read Model（読む用のデータ構造）
+│       └── read_model.go            ← NoteReadModel（読む用の型）
 │
 └── driver/
     ├── factory/
-    │   ├── repository_factory.go    ← 🆕 Command/Query両方のFactory追加
-    │   └── usecase_factory.go       ← 🆕 Command/Query両方のFactory追加
+    │   ├── repository_factory.go    ← Command/Query両方のFactory
+    │   ├── usecase_factory.go       ← Command/Query両方のFactory
+    │   └── http/
+    │       └── presenter_factory.go ← Command/Query両方のFactory
     └── initializer/
-        └── api/initializer.go       ← 🆕 Command/Query両方を配線
-```
+        └── api/initializer.go       ← Command/Query両方を配線
 
-**🆕がついてるのが新しく作るファイル。既存ファイルの変更は最小限。**
+migrations/
+├── 20250210000000_add_note_read_models.up.sql   ← キャッシュテーブル作成
+└── 20250210000001_seed_note_read_models.up.sql  ← 既存データの初回同期
+```
 
 ---
 
-## 📐 各レイヤーの変更を詳しく見よう
+## 📐 各レイヤーの実装を見ていこう
 
-### 1️⃣ ドメイン層 - Read Modelを定義する
+### 1️⃣ ドメイン層 - Read Modelの型を追加
 
-**今：** `note.WithMeta` が読み取り用のデータ構造。でもこれはJOINの結果を表現してるだけ。
-
-**変更後：** Read Model専用のデータ構造を追加。
-
-```
-domain/note/
-├── entity.go       ← Note, Section（変更なし）
-├── types.go        ← WithMeta, Filters（変更なし）
-├── logic.go        ← バリデーション（変更なし）
-├── aggregate.go    ← 集約操作（変更なし）
-└── read_model.go   ← 🆕 NoteReadModel（読む専用）
-```
+> 📂 `internal/domain/note/read_model.go`
 
 ```go
-// 🆕 read_model.go
-
 // NoteReadModel はRead Model（読む専用）のデータ構造。
+// キャッシュテーブル note_read_models に対応する。
 // JOINの結果を事前にまとめたもの。
 type NoteReadModel struct {
     ID             string
     Title          string
     Status         NoteStatus
-    TemplateName   string
+    TemplateID     string
+    TemplateName   string         // ← templates テーブルの情報が入ってる！
     OwnerID        string
-    OwnerFirstName string
+    OwnerFirstName string         // ← accounts テーブルの情報が入ってる！
     OwnerLastName  string
     OwnerThumbnail *string
-    Sections       []SectionReadModel
+    Sections       []SectionReadModel  // ← sections + fields の情報が入ってる！
     CreatedAt      time.Time
     UpdatedAt      time.Time
 }
 
-// SectionReadModel はセクションのRead Model。
 type SectionReadModel struct {
     ID         string
     FieldID    string
@@ -216,32 +222,21 @@ type SectionReadModel struct {
 }
 ```
 
-**ポイント：WithMetaと似てるけど、「DBのキャッシュテーブルに対応する構造」として独立させる。**
+**ポイント：JOINしないと取れなかった情報が、1つの構造体にぜんぶ入ってる。**
+
+ドメイン層で変更したのは **このファイル1つだけ**。
+`entity.go`、`logic.go`、`aggregate.go` は一切触ってない。
 
 ---
 
-### 2️⃣ ポート層 - QueryとCommandを分ける
+### 2️⃣ ポート層 - CommandとQueryを分ける
 
-**今のNoteInputPort（読み書き混在）：**
+#### Command側
 
-```go
-// 今のport/note_port.go
-type NoteInputPort interface {
-    List(ctx, filters) error        // ← 読む
-    Get(ctx, id) error              // ← 読む
-    Create(ctx, input) error        // ← 書く
-    Update(ctx, input) error        // ← 書く
-    ChangeStatus(ctx, input) error  // ← 書く
-    Delete(ctx, id, ownerID) error  // ← 書く
-}
-```
-
-**変更後：2つに分ける**
+> 📂 `internal/port/note_command_port.go`
 
 ```go
-// 🆕 port/note_command_port.go
-
-// NoteCommandInputPort はCommand（書く）専用のユースケースインターフェース。
+// NoteCommandInputPort は書く専用のユースケース。
 type NoteCommandInputPort interface {
     Create(ctx context.Context, input NoteCreateInput) error
     Update(ctx context.Context, input NoteUpdateInput) error
@@ -249,15 +244,15 @@ type NoteCommandInputPort interface {
     Delete(ctx context.Context, id, ownerID string) error
 }
 
-// NoteCommandOutputPort はCommand（書く）専用のプレゼンターインターフェース。
+// NoteCommandOutputPort は書く専用のプレゼンター。
 type NoteCommandOutputPort interface {
     PresentNote(ctx context.Context, note *note.WithMeta) error
     PresentNoteDeleted(ctx context.Context) error
 }
 
-// NoteCommandRepository はCommand（書く）専用のリポジトリインターフェース。
+// NoteCommandRepository は書く専用のリポジトリ。
 type NoteCommandRepository interface {
-    Get(ctx context.Context, id string) (*note.WithMeta, error)   // ← バリデーション用
+    Get(ctx context.Context, id string) (*note.WithMeta, error)   // バリデーション用
     Create(ctx context.Context, n note.Note) (*note.Note, error)
     Update(ctx context.Context, n note.Note) (*note.Note, error)
     UpdateStatus(ctx context.Context, id string, status note.NoteStatus) (*note.Note, error)
@@ -266,22 +261,25 @@ type NoteCommandRepository interface {
 }
 ```
 
-```go
-// 🆕 port/note_query_port.go
+#### Query側
 
-// NoteQueryInputPort はQuery（読む）専用のユースケースインターフェース。
+> 📂 `internal/port/note_query_port.go`
+
+```go
+// NoteQueryInputPort は読む専用のユースケース。
 type NoteQueryInputPort interface {
     List(ctx context.Context, filters note.Filters) error
     Get(ctx context.Context, id string) error
 }
 
-// NoteQueryOutputPort はQuery（読む）専用のプレゼンターインターフェース。
+// NoteQueryOutputPort は読む専用のプレゼンター。
 type NoteQueryOutputPort interface {
     PresentNoteList(ctx context.Context, notes []note.NoteReadModel) error
     PresentNote(ctx context.Context, note *note.NoteReadModel) error
 }
 
-// NoteQueryRepository はQuery（読む）専用のリポジトリインターフェース。
+// NoteQueryRepository は読む専用のリポジトリ。
+// Upsert/Delete は Command 側から呼ばれる同期用メソッド。
 type NoteQueryRepository interface {
     List(ctx context.Context, filters note.Filters) ([]note.NoteReadModel, error)
     Get(ctx context.Context, id string) (*note.NoteReadModel, error)
@@ -290,62 +288,61 @@ type NoteQueryRepository interface {
 }
 ```
 
-**図で見ると：**
+#### 図で見ると
 
 ```
-【Before】                      【After】
+【Before: CRUD】                  【After: CQRS】
 
-NoteInputPort                   NoteQueryInputPort（読む）
-  .List()    ← 読む              .List()
-  .Get()     ← 読む              .Get()
+NoteInputPort                     NoteQueryInputPort（読む）
+  .List()    ← 読む                .List()
+  .Get()     ← 読む                .Get()
   .Create()  ← 書く
-  .Update()  ← 書く             NoteCommandInputPort（書く）
-  .Delete()  ← 書く              .Create()
-                                  .Update()
-                                  .ChangeStatus()
-                                  .Delete()
+  .Update()  ← 書く               NoteCommandInputPort（書く）
+  .Delete()  ← 書く                .Create()
+                                    .Update()
+                                    .ChangeStatus()
+                                    .Delete()
 
-NoteRepository                  NoteQueryRepository（読む）
-  .List()    ← 読む              .List()
-  .Get()     ← 読む              .Get()
-  .Create()  ← 書く              .Upsert()    ← 同期用
-  .Update()  ← 書く              .Delete()    ← 同期用
+NoteRepository                    NoteQueryRepository（読む）
+  .List()    ← 読む                .List()
+  .Get()     ← 読む                .Get()
+  .Create()  ← 書く                .Upsert()    ← 同期用
+  .Update()  ← 書く                .Delete()    ← 同期用
   .Delete()  ← 書く
-                                NoteCommandRepository（書く）
-                                  .Get()       ← バリデーション用
-                                  .Create()
-                                  .Update()
-                                  .Delete()
-                                  .ReplaceSections()
+                                  NoteCommandRepository（書く）
+                                    .Get()       ← バリデーション用
+                                    .Create()
+                                    .Update()
+                                    .Delete()
+                                    .ReplaceSections()
 ```
 
 ---
 
 ### 3️⃣ ユースケース層 - QueryとCommandの中身
 
-#### Query側（新規作成）
+#### Query側 — めっちゃシンプル
+
+> 📂 `internal/usecase/note_query_interactor.go`
 
 ```go
-// 🆕 usecase/note_query_interactor.go
-
-// NoteQueryInteractor は読み取り専用のユースケース。
 type NoteQueryInteractor struct {
-    queryRepo port.NoteQueryRepository    // ← Read Model用のリポジトリ
+    queryRepo port.NoteQueryRepository
     output    port.NoteQueryOutputPort
 }
 
-// List はRead Modelから一覧を取得する。JOINなし！
+// List はキャッシュテーブルから一覧を取得する。JOINなし！
 func (u *NoteQueryInteractor) List(ctx context.Context, filters note.Filters) error {
-    notes, err := u.queryRepo.List(ctx, filters)  // ← キャッシュテーブルから取得
+    notes, err := u.queryRepo.List(ctx, filters)
     if err != nil {
         return err
     }
     return u.output.PresentNoteList(ctx, notes)
 }
 
-// Get はRead Modelから1件取得する。JOINなし！
+// Get はキャッシュテーブルから1件取得する。JOINなし！
 func (u *NoteQueryInteractor) Get(ctx context.Context, id string) error {
-    n, err := u.queryRepo.Get(ctx, id)  // ← キャッシュテーブルから取得
+    n, err := u.queryRepo.Get(ctx, id)
     if err != nil {
         return err
     }
@@ -353,13 +350,13 @@ func (u *NoteQueryInteractor) Get(ctx context.Context, id string) error {
 }
 ```
 
-**めっちゃシンプル。バリデーションもドメインロジックもない。ただ取って返すだけ。**
+**バリデーションもドメインロジックもない。ただ取って返すだけ。これがQuery側の強み。**
 
-#### Command側（新規作成）
+#### Command側 — 書く＋Read Model同期
+
+> 📂 `internal/usecase/note_command_interactor.go`
 
 ```go
-// 🆕 usecase/note_command_interactor.go
-
 type NoteCommandInteractor struct {
     commandRepo port.NoteCommandRepository   // ← Write用
     queryRepo   port.NoteQueryRepository     // ← Read Model同期用
@@ -370,16 +367,32 @@ type NoteCommandInteractor struct {
 
 // Create はノートを作成し、Read Modelも同期する。
 func (u *NoteCommandInteractor) Create(ctx context.Context, input port.NoteCreateInput) error {
-    // ... バリデーション＆書き込み ...
+    // ... バリデーション ...
 
     err = u.tx.WithinTransaction(ctx, func(txCtx context.Context) error {
         // 1. Write DBに書く
         nn, err := u.commandRepo.Create(txCtx, newNote)
-        // ...sectionsも作成...
+        // ... sections も作成 ...
 
-        // 2. 🆕 Read Modelも更新する（同じトランザクション内！）
-        readModel := buildReadModel(nn, tpl, sections)
-        return u.queryRepo.Upsert(txCtx, readModel)
+        // 2. Read Modelも同期する（同じトランザクション内！）
+        created, err := u.commandRepo.Get(txCtx, noteID)
+        if err != nil {
+            return err
+        }
+        return u.queryRepo.Upsert(txCtx, toReadModel(created))
+    })
+    // ...
+}
+
+// Delete はノートを削除し、Read Modelからも消す。
+func (u *NoteCommandInteractor) Delete(ctx context.Context, id, ownerID string) error {
+    // ... バリデーション ...
+
+    err = u.tx.WithinTransaction(ctx, func(txCtx context.Context) error {
+        if err := u.commandRepo.Delete(txCtx, id); err != nil {
+            return err
+        }
+        return u.queryRepo.Delete(txCtx, id)  // ← キャッシュからも消す
     })
     // ...
 }
@@ -387,79 +400,157 @@ func (u *NoteCommandInteractor) Create(ctx context.Context, input port.NoteCreat
 
 **ポイント：書くときに同じトランザクションでRead Modelも更新する。だから整合性が保たれる。**
 
+```
+トランザクション開始
+  │
+  ├─ notesテーブルに書く          ✅
+  ├─ sectionsテーブルに書く       ✅
+  ├─ note_read_modelsに同期      ✅
+  │
+  └─ 全部成功 → COMMIT
+     1つでも失敗 → ROLLBACK（全部元に戻る）
+```
+
 ---
 
-### 4️⃣ アダプター層 - Read Model用リポジトリ
+### 4️⃣ アダプター層 - キャッシュテーブルとリポジトリ
 
 #### キャッシュテーブル（マイグレーション）
 
+> 📂 `migrations/20250210000000_add_note_read_models.up.sql`
+
 ```sql
--- 🆕 新しいマイグレーション
 CREATE TABLE note_read_models (
     id UUID PRIMARY KEY,                -- notes.id と同じ
     title TEXT NOT NULL,
-    status TEXT NOT NULL,
-    template_name TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('Draft', 'Publish')),
+    template_id UUID NOT NULL,
+    template_name TEXT NOT NULL,         -- ← JOINしなくていい！
     owner_id UUID NOT NULL,
-    owner_first_name TEXT NOT NULL,
+    owner_first_name TEXT NOT NULL,      -- ← JOINしなくていい！
     owner_last_name TEXT NOT NULL,
     owner_thumbnail TEXT,
-    sections_json JSONB NOT NULL DEFAULT '[]',
+    sections_json JSONB NOT NULL DEFAULT '[]',  -- ← 全セクション入り！
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL
 );
 
--- 検索用インデックス
 CREATE INDEX idx_note_read_models_status ON note_read_models(status);
-CREATE INDEX idx_note_read_models_owner ON note_read_models(owner_id);
-CREATE INDEX idx_note_read_models_updated ON note_read_models(updated_at DESC);
-CREATE INDEX idx_note_read_models_title ON note_read_models USING gin(title gin_trgm_ops);
+CREATE INDEX idx_note_read_models_owner_id ON note_read_models(owner_id);
+CREATE INDEX idx_note_read_models_template_id ON note_read_models(template_id);
+CREATE INDEX idx_note_read_models_updated_at ON note_read_models(updated_at DESC);
 ```
 
-#### Query用リポジトリ（新規作成）
+#### 初回同期（既存データの流し込み）
+
+> 📂 `migrations/20250210000001_seed_note_read_models.up.sql`
+
+CQRSを導入する前に作られたノートは `note_read_models` に入ってない。
+だから **1回だけ** 既存データを流し込む必要がある。
+
+```sql
+INSERT INTO note_read_models (...)
+SELECT
+    n.id, n.title, n.status, n.template_id, t.name,
+    n.owner_id, a.first_name, a.last_name, a.thumbnail,
+    COALESCE(
+        (SELECT jsonb_agg(...) FROM sections s JOIN fields f ...),
+        '[]'::jsonb
+    ),
+    n.created_at, n.updated_at
+FROM notes n
+JOIN templates t ON t.id = n.template_id
+JOIN accounts a ON a.id = n.owner_id
+ON CONFLICT (id) DO NOTHING;
+```
+
+**これ以降はCommand経由で自動同期されるから、このSQLは2度と実行しなくていい。**
+
+#### Query用SQLクエリ
+
+> 📂 `internal/adapter/gateway/db/sqlc/queries/note_read_models.sql`
+
+```sql
+-- JOINなし！1テーブルから取るだけ！
+-- name: ListNoteReadModels :many
+SELECT * FROM note_read_models
+WHERE (NULLIF($1::text, '') IS NULL OR status = $1)
+  AND ($2::uuid IS NULL OR template_id = $2)
+  AND ($3::uuid IS NULL OR owner_id = $3)
+  AND (NULLIF($4::text, '') IS NULL OR title ILIKE '%' || $4 || '%')
+ORDER BY updated_at DESC;
+
+-- name: GetNoteReadModel :one
+SELECT * FROM note_read_models WHERE id = $1;
+
+-- name: UpsertNoteReadModel :exec
+INSERT INTO note_read_models (...) VALUES (...)
+ON CONFLICT (id) DO UPDATE SET ...;  -- ← 同じIDがあれば更新
+
+-- name: DeleteNoteReadModel :exec
+DELETE FROM note_read_models WHERE id = $1;
+```
+
+**Before（CRUD）のListNotesと比較してみよう：**
+
+```sql
+-- 【Before】 3テーブルJOIN + セクション別クエリ
+SELECT n.*, t.name, a.first_name, a.last_name, a.thumbnail
+FROM notes n
+JOIN templates t ON t.id = n.template_id   -- JOIN!
+JOIN accounts a ON a.id = n.owner_id       -- JOIN!
+WHERE ...
+
+-- 【After】 JOINなし！
+SELECT * FROM note_read_models WHERE ...
+```
+
+#### Query用リポジトリ
+
+> 📂 `internal/adapter/gateway/db/sqlc/note_query_repository.go`
 
 ```go
-// 🆕 adapter/gateway/db/sqlc/note_query_repository.go
-
 type NoteQueryRepository struct {
     pool    *pgxpool.Pool
     queries *generated.Queries
 }
 
-// List はnote_read_modelsテーブルから一覧を取得する。JOINなし。
+// List はキャッシュテーブルから取得。JOINなし。
 func (r *NoteQueryRepository) List(ctx context.Context, filters note.Filters) ([]note.NoteReadModel, error) {
-    // SELECT * FROM note_read_models WHERE ... ORDER BY updated_at DESC
-    // → JOINなし！1テーブルから取るだけ！
+    rows, err := queriesForContext(ctx, r.queries).ListNoteReadModels(ctx, params)
+    // ... rows を NoteReadModel に変換して返す
 }
 
-// Upsert はRead Modelを挿入or更新する（Command側から呼ばれる）。
+// Upsert はキャッシュテーブルを更新（Command側から呼ばれる）。
 func (r *NoteQueryRepository) Upsert(ctx context.Context, model note.NoteReadModel) error {
-    // INSERT INTO note_read_models (...) VALUES (...)
-    // ON CONFLICT (id) DO UPDATE SET ...
+    sectionsJSON, _ := json.Marshal(model.Sections)
+    return queriesForContext(ctx, r.queries).UpsertNoteReadModel(ctx, &generated.UpsertNoteReadModelParams{
+        // ... NoteReadModel → DB型に変換
+    })
 }
 ```
 
 ---
 
-### 5️⃣ コントローラー層 - QueryとCommandの使い分け
+### 5️⃣ コントローラー層 - CommandとQueryの使い分け
+
+> 📂 `internal/adapter/http/controller/note_controller.go`
 
 ```go
-// adapter/http/controller/note_controller.go（変更）
-
 type NoteController struct {
     // Command用（書く）
-    commandInputFactory func(...) port.NoteCommandInputPort
-    commandOutputFactory func() *presenter.NotePresenter
+    commandInputFactory  func(...) port.NoteCommandInputPort
+    commandOutputFactory func() *presenter.NoteCommandPresenter
 
-    // 🆕 Query用（読む）
-    queryInputFactory   func(...) port.NoteQueryInputPort
-    queryOutputFactory  func() *presenter.NoteQueryPresenter
+    // Query用（読む）
+    queryInputFactory  func(...) port.NoteQueryInputPort
+    queryOutputFactory func() *presenter.NoteQueryPresenter
 
     // 共通
-    commandRepoFactory  func() port.NoteCommandRepository
-    queryRepoFactory    func() port.NoteQueryRepository
-    tplRepoFactory      func() port.TemplateRepository
-    txFactory           func() port.TxManager
+    commandRepoFactory func() port.NoteCommandRepository
+    queryRepoFactory   func() port.NoteQueryRepository
+    tplRepoFactory     func() port.TemplateRepository
+    txFactory          func() port.TxManager
 }
 
 // List は Query側を使う（読む）
@@ -481,14 +572,25 @@ func (c *NoteController) Create(ctx echo.Context) error {
 }
 ```
 
+**どのエンドポイントがどっちを使うか一覧：**
+
+| エンドポイント | Query / Command | メソッド |
+|--------------|----------------|---------|
+| `GET /notes` | **Query** | `newQueryIO()` → `queryInput.List()` |
+| `GET /notes/:id` | **Query** | `newQueryIO()` → `queryInput.Get()` |
+| `POST /notes` | **Command** | `newCommandIO()` → `commandInput.Create()` |
+| `PUT /notes/:id` | **Command** | `newCommandIO()` → `commandInput.Update()` |
+| `DELETE /notes/:id` | **Command** | `newCommandIO()` → `commandInput.Delete()` |
+| `POST /notes/:id/publish` | **Command** | `newCommandIO()` → `commandInput.ChangeStatus()` |
+| `POST /notes/:id/unpublish` | **Command** | `newCommandIO()` → `commandInput.ChangeStatus()` |
+
 ---
 
-### 6️⃣ ファクトリー＆初期化 - 配線を追加
+### 6️⃣ ファクトリー＆初期化 - 配線
+
+> 📂 `internal/driver/factory/repository_factory.go`
 
 ```go
-// driver/factory/repository_factory.go（変更）
-
-// 🆕 追加
 func NewNoteCommandRepoFactory(pool *pgxpool.Pool) func() port.NoteCommandRepository {
     return func() port.NoteCommandRepository {
         return sqlc.NewNoteCommandRepository(pool)
@@ -503,10 +605,9 @@ func NewNoteQueryRepoFactory(pool *pgxpool.Pool) func() port.NoteQueryRepository
 }
 ```
 
-```go
-// driver/initializer/api/initializer.go（変更）
+> 📂 `internal/driver/initializer/api/initializer.go`
 
-// 🆕 Command/Query両方のFactoryを作成
+```go
 noteCommandRepoFactory := factory.NewNoteCommandRepoFactory(pool)
 noteQueryRepoFactory := factory.NewNoteQueryRepoFactory(pool)
 noteCommandInputFactory := factory.NewNoteCommandInputFactory()
@@ -535,19 +636,18 @@ nc := httpcontroller.NewNoteController(
 ```
 1. 📱 画面: GET /notes?status=Publish
 
-2. 🎮 Controller: List()
+2. 🎮 NoteController: List()
    → queryInput, p := c.newQueryIO()
-   → queryInput.List(ctx, filters)
 
 3. 📋 NoteQueryInteractor: List()
-   → readRepo.List(ctx, filters)
-   → JOINなし！SELECT * FROM note_read_models WHERE ...
+   → queryRepo.List(ctx, filters)
 
-4. 💾 note_read_models テーブル
-   → 一発で取得！
+4. 💾 NoteQueryRepository: List()
+   → SELECT * FROM note_read_models WHERE ...
+   → JOINなし！1テーブルから一発取得！
 
 5. 🎨 NoteQueryPresenter: PresentNoteList()
-   → Read Model → APIレスポンスに変換
+   → NoteReadModel → APIレスポンスに変換
 
 6. 📱 画面: ノート一覧が表示される（速い！）
 ```
@@ -557,25 +657,24 @@ nc := httpcontroller.NewNoteController(
 ```
 1. 📱 画面: POST /notes {title: "新しいノート", ...}
 
-2. 🎮 Controller: Create()
+2. 🎮 NoteController: Create()
    → commandInput, p := c.newCommandIO()
-   → commandInput.Create(ctx, input)
 
 3. 📋 NoteCommandInteractor: Create()
    → バリデーション実行
-   → tx.WithinTransaction(ctx, func(txCtx) {
+   → tx.WithinTransaction 開始
 
-4.    💾 Write DB:
-      → commandRepo.Create(txCtx, note)        // notesテーブルに書く
-      → commandRepo.ReplaceSections(txCtx, ...) // sectionsテーブルに書く
+4.    💾 NoteCommandRepository:
+      → notes テーブルに INSERT
+      → sections テーブルに INSERT
 
-5.    💾 Read Model同期:                          // 🆕
-      → queryRepo.Upsert(txCtx, model)          // note_read_modelsも更新
+5.    💾 NoteQueryRepository:
+      → note_read_models テーブルに UPSERT（同期！）
 
-      }) // トランザクション終了
-         // → 両方成功 or 両方ロールバック
+      → トランザクション COMMIT
+        （4と5が両方成功して初めて確定）
 
-6. 🎨 NotePresenter: PresentNote()
+6. 🎨 NoteCommandPresenter: PresentNote()
    → ドメインモデル → APIレスポンスに変換
 
 7. 📱 画面: 作成されたノートが表示される
@@ -583,9 +682,9 @@ nc := httpcontroller.NewNoteController(
 
 ---
 
-## 🧱 変更しないところ（超重要）
+## 🧱 変更しなかったところ（超重要）
 
-CQRSにしても **変えなくていい場所がたくさんある**。
+CQRSにしても **変えなかったファイルがこんなにある**。
 これがClean Architectureの強み。
 
 ```
@@ -595,6 +694,7 @@ CQRSにしても **変えなくていい場所がたくさんある**。
 │  domain/note/entity.go      ← Note, Section     │
 │  domain/note/logic.go       ← バリデーション     │
 │  domain/note/aggregate.go   ← 集約操作           │
+│  domain/note/types.go       ← Filters, WithMeta  │
 │  domain/errors/             ← エラー定義         │
 │  domain/service/            ← ドメインサービス    │
 │  domain/template/           ← テンプレート全般    │
@@ -610,40 +710,8 @@ CQRSにしても **変えなくていい場所がたくさんある**。
 │  driver/config/             ← 設定               │
 │  driver/db/                 ← DB接続/TxManager   │
 │                                                  │
-│  → ドメイン層はまったく触らない！                 │
-│  → 他のエンティティ（Account, Template）も       │
-│    変更なし！                                    │
-└─────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────┐
-│  ✏️ 変更あり（小さい変更）                       │
-│                                                  │
-│  adapter/http/controller/   ← Query/Command分岐  │
-│    note_controller.go                            │
-│  driver/factory/            ← Factory追加        │
-│  driver/initializer/        ← 配線追加           │
-└─────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────┐
-│  🆕 新規作成                                     │
-│                                                  │
-│  domain/note/read_model.go        ← Read Modelの型│
-│  port/note_command_port.go        ← Command系ポート│
-│  port/note_query_port.go          ← Query系ポート │
-│  usecase/note_command_             ← Command用     │
-│    interactor.go                    UseCase       │
-│  usecase/note_query_              ← Query用       │
-│    interactor.go                    UseCase       │
-│  adapter/gateway/db/sqlc/         ← Command用     │
-│    note_command_repository.go       リポジトリ     │
-│  adapter/gateway/db/sqlc/         ← Query用       │
-│    note_query_repository.go         リポジトリ     │
-│  adapter/http/presenter/          ← Command用     │
-│    note_command_presenter.go        プレゼンター   │
-│  adapter/http/presenter/          ← Query用       │
-│    note_query_presenter.go          プレゼンター   │
-│  migrations/XXXXXX_add_           ← キャッシュ     │
-│    note_read_models.sql             テーブル       │
+│  → ドメイン層はまったく触ってない！               │
+│  → Account, Template も変更なし！                │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -676,29 +744,14 @@ CQRSにしても **変えなくていい場所がたくさんある**。
 
 ---
 
-## 📊 変更量の見積もり
-
-| 種類 | ファイル数 | 変更の大きさ |
-|-----|----------|------------|
-| **新規作成** | 9〜10ファイル | Read Model型、Command/Queryポート、Command/Query UseCase、Command/Query Repo、Command/Query Presenter、マイグレーション |
-| **既存変更（小）** | 2〜3ファイル | Factory追加、Initializer修正、NoteController（分岐追加） |
-| **変更なし** | 大半 | ドメイン層、他のエンティティ、gRPC、設定、DB接続 |
-
-**→ 全体の8割は変更なし。CQRSは「追加」が中心で「破壊」は少ない。**
-
----
-
 ## 🎯 まとめ
 
 | 質問 | 答え |
 |-----|------|
-| 何を分ける？ | InputPort / UseCase / Repository を Query（読む）と Command（書く）に分離 |
-| ドメイン層は変わる？ | ほぼ変わらない。Read Model用の型を1つ追加するだけ |
-| 同期はどうやる？ | Command側で書くときに、同じトランザクション内でRead Modelも更新 |
-| Controller は？ | 読むときはQuery用、書くときはCommand用のUseCaseを呼び分ける |
-| 変更量は？ | 新規9〜10ファイル + 既存2〜3ファイルの小変更。大半は変更なし |
+| 何を分けた？ | Port / UseCase / Repository / Presenter を Query（読む）と Command（書く）に分離 |
+| ドメイン層は変わった？ | ほぼ変わらない。`read_model.go` を1つ追加しただけ |
+| 同期はどうやる？ | Command側で書くとき、同じトランザクション内でRead Modelも更新 |
+| 既存データは？ | 初回マイグレーションで既存ノートをキャッシュテーブルに流し込む |
+| Controller は？ | 読むときは `newQueryIO()`、書くときは `newCommandIO()` で使い分け |
+| 全員のデータが同期される？ | はい。誰がAPIを叩いても、Command経由で必ずキャッシュが更新される |
 | Clean Architectureとの関係は？ | ポート（インターフェース）があるから、Read Modelの実装を自由に差し替えられる |
-
----
-
-> 📘 **次のステップ**: 実際にコードを書いていきましょう！
