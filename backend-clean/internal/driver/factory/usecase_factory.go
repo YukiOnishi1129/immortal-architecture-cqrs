@@ -2,8 +2,8 @@
 package factory
 
 import (
-	"immortal-architecture-clean/backend/internal/port"
-	"immortal-architecture-clean/backend/internal/usecase"
+	"immortal-architecture-cqrs/backend/internal/port"
+	"immortal-architecture-cqrs/backend/internal/usecase"
 )
 
 // NewAccountInputFactory returns a factory for AccountInteractor.

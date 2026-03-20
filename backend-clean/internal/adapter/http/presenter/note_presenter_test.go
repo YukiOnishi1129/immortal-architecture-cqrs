@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"immortal-architecture-clean/backend/internal/domain/note"
+	"immortal-architecture-cqrs/backend/internal/domain/note"
 )
 
 func TestNotePresenter_TableDriven(t *testing.T) {

@@ -5,11 +5,11 @@ import (
 	"context"
 	"strings"
 
-	domainerr "immortal-architecture-clean/backend/internal/domain/errors"
-	"immortal-architecture-clean/backend/internal/domain/note"
-	"immortal-architecture-clean/backend/internal/domain/service"
-	"immortal-architecture-clean/backend/internal/domain/template"
-	"immortal-architecture-clean/backend/internal/port"
+	domainerr "immortal-architecture-cqrs/backend/internal/domain/errors"
+	"immortal-architecture-cqrs/backend/internal/domain/note"
+	"immortal-architecture-cqrs/backend/internal/domain/service"
+	"immortal-architecture-cqrs/backend/internal/domain/template"
+	"immortal-architecture-cqrs/backend/internal/port"
 )
 
 // NoteInteractor handles note use cases.

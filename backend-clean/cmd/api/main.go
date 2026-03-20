@@ -6,7 +6,7 @@ import (
 	"log"
 	"strconv"
 
-	initializer "immortal-architecture-clean/backend/internal/driver/initializer/api"
+	initializer "immortal-architecture-cqrs/backend/internal/driver/initializer/api"
 )
 
 func main() {

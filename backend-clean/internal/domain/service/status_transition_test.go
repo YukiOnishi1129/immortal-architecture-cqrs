@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	domainerr "immortal-architecture-clean/backend/internal/domain/errors"
-	"immortal-architecture-clean/backend/internal/domain/note"
+	domainerr "immortal-architecture-cqrs/backend/internal/domain/errors"
+	"immortal-architecture-cqrs/backend/internal/domain/note"
 )
 
 func TestCanPublish(t *testing.T) {

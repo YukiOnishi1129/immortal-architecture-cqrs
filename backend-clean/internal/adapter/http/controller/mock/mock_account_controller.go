@@ -3,8 +3,8 @@ package mock
 import (
 	"context"
 
-	"immortal-architecture-clean/backend/internal/domain/account"
-	"immortal-architecture-clean/backend/internal/port"
+	"immortal-architecture-cqrs/backend/internal/domain/account"
+	"immortal-architecture-cqrs/backend/internal/port"
 )
 
 // AccountInputStub is a lightweight stub for account use case input.

@@ -8,9 +8,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	mockdb "immortal-architecture-clean/backend/internal/adapter/gateway/db/sqlc/mock"
-	"immortal-architecture-clean/backend/internal/adapter/gateway/db/sqlc/generated"
-	"immortal-architecture-clean/backend/internal/domain/account"
+	mockdb "immortal-architecture-cqrs/backend/internal/adapter/gateway/db/sqlc/mock"
+	"immortal-architecture-cqrs/backend/internal/adapter/gateway/db/sqlc/generated"
+	"immortal-architecture-cqrs/backend/internal/domain/account"
 )
 
 func TestToDomainAccount(t *testing.T) {

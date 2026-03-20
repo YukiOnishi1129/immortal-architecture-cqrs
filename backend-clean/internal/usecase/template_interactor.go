@@ -4,9 +4,9 @@ package usecase
 import (
 	"context"
 
-	domainerr "immortal-architecture-clean/backend/internal/domain/errors"
-	"immortal-architecture-clean/backend/internal/domain/template"
-	"immortal-architecture-clean/backend/internal/port"
+	domainerr "immortal-architecture-cqrs/backend/internal/domain/errors"
+	"immortal-architecture-cqrs/backend/internal/domain/template"
+	"immortal-architecture-cqrs/backend/internal/port"
 )
 
 // TemplateInteractor handles template use cases.

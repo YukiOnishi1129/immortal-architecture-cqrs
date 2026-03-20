@@ -4,8 +4,8 @@ package port
 import (
 	"context"
 
-	"immortal-architecture-clean/backend/internal/domain/note"
-	"immortal-architecture-clean/backend/internal/domain/template"
+	"immortal-architecture-cqrs/backend/internal/domain/note"
+	"immortal-architecture-cqrs/backend/internal/domain/template"
 )
 
 // NoteInputPort defines note use case inputs.

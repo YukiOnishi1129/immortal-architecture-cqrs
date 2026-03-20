@@ -6,10 +6,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 
-	httpcontroller "immortal-architecture-clean/backend/internal/adapter/http/controller"
-	openapi "immortal-architecture-clean/backend/internal/adapter/http/generated/openapi"
-	"immortal-architecture-clean/backend/internal/driver/factory"
-	httpfactory "immortal-architecture-clean/backend/internal/driver/factory/http"
+	httpcontroller "immortal-architecture-cqrs/backend/internal/adapter/http/controller"
+	openapi "immortal-architecture-cqrs/backend/internal/adapter/http/generated/openapi"
+	"immortal-architecture-cqrs/backend/internal/driver/factory"
+	httpfactory "immortal-architecture-cqrs/backend/internal/driver/factory/http"
 )
 
 // Smoke test to ensure initializer wiring does not panic and returns non-nil server.

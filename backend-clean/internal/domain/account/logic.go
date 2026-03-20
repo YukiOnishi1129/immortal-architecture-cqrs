@@ -4,7 +4,7 @@ import (
 	"errors"
 	"strings"
 
-	domainerr "immortal-architecture-clean/backend/internal/domain/errors"
+	domainerr "immortal-architecture-cqrs/backend/internal/domain/errors"
 )
 
 var (

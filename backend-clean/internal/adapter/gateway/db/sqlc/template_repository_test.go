@@ -9,10 +9,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	mockdb "immortal-architecture-clean/backend/internal/adapter/gateway/db/sqlc/mock"
-	"immortal-architecture-clean/backend/internal/adapter/gateway/db/sqlc/generated"
-	domainerr "immortal-architecture-clean/backend/internal/domain/errors"
-	"immortal-architecture-clean/backend/internal/domain/template"
+	mockdb "immortal-architecture-cqrs/backend/internal/adapter/gateway/db/sqlc/mock"
+	"immortal-architecture-cqrs/backend/internal/adapter/gateway/db/sqlc/generated"
+	domainerr "immortal-architecture-cqrs/backend/internal/domain/errors"
+	"immortal-architecture-cqrs/backend/internal/domain/template"
 )
 
 func TestTemplateRepository_Create(t *testing.T) {

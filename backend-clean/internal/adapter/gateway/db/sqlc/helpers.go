@@ -7,8 +7,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"immortal-architecture-clean/backend/internal/adapter/gateway/db/sqlc/generated"
-	driverdb "immortal-architecture-clean/backend/internal/driver/db"
+	"immortal-architecture-cqrs/backend/internal/adapter/gateway/db/sqlc/generated"
+	driverdb "immortal-architecture-cqrs/backend/internal/driver/db"
 )
 
 func toUUID(str string) (pgtype.UUID, error) {

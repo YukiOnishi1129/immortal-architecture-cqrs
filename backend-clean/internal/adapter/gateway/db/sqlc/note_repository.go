@@ -9,10 +9,10 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"immortal-architecture-clean/backend/internal/adapter/gateway/db/sqlc/generated"
-	domainerr "immortal-architecture-clean/backend/internal/domain/errors"
-	"immortal-architecture-clean/backend/internal/domain/note"
-	"immortal-architecture-clean/backend/internal/port"
+	"immortal-architecture-cqrs/backend/internal/adapter/gateway/db/sqlc/generated"
+	domainerr "immortal-architecture-cqrs/backend/internal/domain/errors"
+	"immortal-architecture-cqrs/backend/internal/domain/note"
+	"immortal-architecture-cqrs/backend/internal/port"
 )
 
 // NoteRepository implements note persistence.

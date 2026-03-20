@@ -8,11 +8,11 @@ import (
 
 	"github.com/labstack/echo/v4"
 
-	ctrlmock "immortal-architecture-clean/backend/internal/adapter/http/controller/mock"
-	openapi "immortal-architecture-clean/backend/internal/adapter/http/generated/openapi"
-	"immortal-architecture-clean/backend/internal/adapter/http/presenter"
-	domainerr "immortal-architecture-clean/backend/internal/domain/errors"
-	"immortal-architecture-clean/backend/internal/port"
+	ctrlmock "immortal-architecture-cqrs/backend/internal/adapter/http/controller/mock"
+	openapi "immortal-architecture-cqrs/backend/internal/adapter/http/generated/openapi"
+	"immortal-architecture-cqrs/backend/internal/adapter/http/presenter"
+	domainerr "immortal-architecture-cqrs/backend/internal/domain/errors"
+	"immortal-architecture-cqrs/backend/internal/port"
 )
 
 func TestAccountController_CreateOrGet(t *testing.T) {

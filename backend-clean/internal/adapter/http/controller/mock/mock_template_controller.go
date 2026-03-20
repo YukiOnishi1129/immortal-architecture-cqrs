@@ -3,8 +3,8 @@ package mock
 import (
 	"context"
 
-	"immortal-architecture-clean/backend/internal/domain/template"
-	"immortal-architecture-clean/backend/internal/port"
+	"immortal-architecture-cqrs/backend/internal/domain/template"
+	"immortal-architecture-cqrs/backend/internal/port"
 )
 
 // TemplateInputStub is a lightweight stub for template use case input.

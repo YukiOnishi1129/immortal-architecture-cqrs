@@ -3,8 +3,8 @@ package mock
 import (
 	"context"
 
-	"immortal-architecture-clean/backend/internal/domain/note"
-	"immortal-architecture-clean/backend/internal/port"
+	"immortal-architecture-cqrs/backend/internal/domain/note"
+	"immortal-architecture-cqrs/backend/internal/port"
 )
 
 // NoteInputStub is a lightweight stub for note use case input.

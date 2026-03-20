@@ -1,4 +1,4 @@
-module immortal-architecture-clean/backend
+module immortal-architecture-cqrs/backend
 
 go 1.25
 

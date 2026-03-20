@@ -4,9 +4,9 @@ package factory
 import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"immortal-architecture-clean/backend/internal/adapter/gateway/db/sqlc"
-	// "immortal-architecture-clean/backend/internal/adapter/gateway/db/gorm"
-	"immortal-architecture-clean/backend/internal/port"
+	"immortal-architecture-cqrs/backend/internal/adapter/gateway/db/sqlc"
+	// "immortal-architecture-cqrs/backend/internal/adapter/gateway/db/gorm"
+	"immortal-architecture-cqrs/backend/internal/port"
 )
 
 // NewAccountRepoFactory returns a factory that creates AccountRepository.

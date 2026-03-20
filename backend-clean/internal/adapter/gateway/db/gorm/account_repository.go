@@ -6,9 +6,9 @@ import (
 
 	"gorm.io/gorm"
 
-	"immortal-architecture-clean/backend/internal/domain/account"
-	domainerr "immortal-architecture-clean/backend/internal/domain/errors"
-	"immortal-architecture-clean/backend/internal/port"
+	"immortal-architecture-cqrs/backend/internal/domain/account"
+	domainerr "immortal-architecture-cqrs/backend/internal/domain/errors"
+	"immortal-architecture-cqrs/backend/internal/port"
 )
 
 // AccountRepository implements account persistence using GORM.

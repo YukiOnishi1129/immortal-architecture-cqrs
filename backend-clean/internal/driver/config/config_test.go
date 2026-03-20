@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"immortal-architecture-clean/backend/internal/driver/config"
+	"immortal-architecture-cqrs/backend/internal/driver/config"
 )
 
 func TestLoad(t *testing.T) {
