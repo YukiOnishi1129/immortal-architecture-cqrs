@@ -3,6 +3,7 @@ sql:
   - engine: "postgresql"
     schema:
       - "migrations/20250209000000_init_schema.up.sql"
+      - "migrations/20250210000000_add_note_read_models.up.sql"
     queries: "internal/adapter/gateway/db/sqlc/queries"
     gen:
       go:
@@ -15,5 +16,8 @@ sql:
         emit_params_struct_pointers: true
         overrides:
           - column: "notes.status"
+            go_type:
+              type: "string"
+          - column: "note_read_models.status"
             go_type:
               type: "string"

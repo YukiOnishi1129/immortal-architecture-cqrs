@@ -26,3 +26,17 @@ func NewNoteInputFactory() func(noteRepo port.NoteRepository, tplRepo port.Templ
 		return usecase.NewNoteInteractor(noteRepo, tplRepo, tx, output)
 	}
 }
+
+// NewNoteCommandInputFactory returns a factory for NoteCommandInteractor.
+func NewNoteCommandInputFactory() func(commandRepo port.NoteCommandRepository, queryRepo port.NoteQueryRepository, tplRepo port.TemplateRepository, tx port.TxManager, output port.NoteCommandOutputPort) port.NoteCommandInputPort {
+	return func(commandRepo port.NoteCommandRepository, queryRepo port.NoteQueryRepository, tplRepo port.TemplateRepository, tx port.TxManager, output port.NoteCommandOutputPort) port.NoteCommandInputPort {
+		return usecase.NewNoteCommandInteractor(commandRepo, queryRepo, tplRepo, tx, output)
+	}
+}
+
+// NewNoteQueryInputFactory returns a factory for NoteQueryInteractor.
+func NewNoteQueryInputFactory() func(queryRepo port.NoteQueryRepository, output port.NoteQueryOutputPort) port.NoteQueryInputPort {
+	return func(queryRepo port.NoteQueryRepository, output port.NoteQueryOutputPort) port.NoteQueryInputPort {
+		return usecase.NewNoteQueryInteractor(queryRepo, output)
+	}
+}

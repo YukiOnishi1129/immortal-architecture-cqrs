@@ -23,3 +23,17 @@ func NewNoteOutputFactory() func() *httppresenter.NotePresenter {
 		return httppresenter.NewNotePresenter()
 	}
 }
+
+// NewNoteCommandOutputFactory returns a factory for HTTP NoteCommandPresenter.
+func NewNoteCommandOutputFactory() func() *httppresenter.NoteCommandPresenter {
+	return func() *httppresenter.NoteCommandPresenter {
+		return httppresenter.NewNoteCommandPresenter()
+	}
+}
+
+// NewNoteQueryOutputFactory returns a factory for HTTP NoteQueryPresenter.
+func NewNoteQueryOutputFactory() func() *httppresenter.NoteQueryPresenter {
+	return func() *httppresenter.NoteQueryPresenter {
+		return httppresenter.NewNoteQueryPresenter()
+	}
+}

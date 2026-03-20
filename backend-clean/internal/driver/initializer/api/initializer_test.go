@@ -28,9 +28,12 @@ func TestNewServer_Wiring(t *testing.T) {
 		factory.NewTxFactory(nil),
 	)
 	nc := httpcontroller.NewNoteController(
-		factory.NewNoteInputFactory(),
-		httpfactory.NewNoteOutputFactory(),
-		factory.NewNoteRepoFactory(pool),
+		factory.NewNoteCommandInputFactory(),
+		httpfactory.NewNoteCommandOutputFactory(),
+		factory.NewNoteQueryInputFactory(),
+		httpfactory.NewNoteQueryOutputFactory(),
+		factory.NewNoteCommandRepoFactory(pool),
+		factory.NewNoteQueryRepoFactory(pool),
 		factory.NewTemplateRepoFactory(pool),
 		factory.NewTxFactory(nil),
 	)

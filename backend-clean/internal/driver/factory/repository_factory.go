@@ -41,3 +41,17 @@ func NewNoteRepoFactory(pool *pgxpool.Pool) func() port.NoteRepository {
 		return sqlc.NewNoteRepository(pool)
 	}
 }
+
+// NewNoteCommandRepoFactory returns a factory that creates NoteCommandRepository.
+func NewNoteCommandRepoFactory(pool *pgxpool.Pool) func() port.NoteCommandRepository {
+	return func() port.NoteCommandRepository {
+		return sqlc.NewNoteCommandRepository(pool)
+	}
+}
+
+// NewNoteQueryRepoFactory returns a factory that creates NoteQueryRepository.
+func NewNoteQueryRepoFactory(pool *pgxpool.Pool) func() port.NoteQueryRepository {
+	return func() port.NoteQueryRepository {
+		return sqlc.NewNoteQueryRepository(pool)
+	}
+}
